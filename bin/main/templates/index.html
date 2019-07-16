@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+	
+	<title>Monitoring Page</title>
+	
+	<link rel="stylesheet" href="//unpkg.com/bootstrap@4/dist/css/bootstrap.min.css">
+	<link rel="stylesheet" href="https://use.fontawesome.com/releases/v5.9.0/css/all.css">
+	
+	<style>
+		@import url('https://fonts.googleapis.com/css?family=Nanum+Gothic:400,700&display=swap&subset=korean');
+	
+		html, body {
+		    width: 100%;
+		    height: 100%;
+		    background-color: #f6f6f6;
+		    font-family: "Nanum Gothic", sans-serif;
+		    font-size: 17px;
+		    -webkit-font-smoothing: antialiased;
+		    -moz-osx-font-smoothing: antialiased;
+		}
+		
+		.progress-bar { font-weight: bold; }
+		
+		table { font-size: 16px; }
+		
+		.table-hover tbody tr:hover td, 
+		.table-hover tbody tr:hover th {
+  			background-color: SkyBlue;
+			transition: 0.25s;
+		}
+	</style>
+</head>
+	
+<body>
+	<div class="container h-100">
+		<div class="wrapper d-flex flex-column my-5">
+			<div class="title mb-2">
+				<h3 class="text-dark">
+					<i class="fas fa-tachometer-alt"></i><strong> 모니터링 정보</strong> 
+					<span class="text-dark-50"><small>Application Monitoring Data</small></span>
+				</h3>
+			</div>
+			<div class="row mb-4">
+				<div class="col-6">
+					<div class="card">
+						<div class="card-header bg-dark">
+							<span class="text-white text-left"><strong>CPU 정보</strong></span>
+							<span class="text-white-50"><small>CPU Info</small></span>
+						</div>
+						<div class="card-body">
+							<p class="text-dark" style="margin-bottom:9px">
+								<strong><span id="cpu-model"></span></strong>
+							</p>
+							<span id="cpu-core" class="text-primary font-weight-bold"></span> Core<span id="cpu-thread" class="text-primary font-weight-bold ml-2"></span> Thread
+							<hr>
+							<p class="text-dark">
+								<strong>Clock</strong> : <span id="cpu-clock"></span><span class="text-dark-50 mr-3"> MHz</span>
+								<strong>Load Average</strong> : <span id="cpu-load"></span> %
+							</p>
+							<div class="progress">
+								<div id="progressbar-cpu" class="progress-bar progress-bar-striped progress-bar-animated bg-success"
+									style="width:0%" role="progressbar" aria-valuenow="25" aria-valuemin="0" aria-valuemax="100">
+								</div>
+							</div>
+						</div>
+					</div>
+				</div>
+				<div class="col-6">
+					<div class="card">
+						<div class="card-header bg-dark">
+							<span class="text-white text-left"><strong>메모리 사용량</strong></span>
+							<span class="text-white-50"><small>Memory Usage</small></span>
+						</div>
+						<div class="card-body">
+							<p class="text-dark">
+								<strong>System Used</strong> : <span id="memory-used"></span> MB / 
+								<strong>Max</strong> : <span id="memory-max"></span> MB /
+								<strong>Swap</strong> : <span id="memory-swap"></span> MB
+							</p>
+							<div class="progress">
+								<div id="progressbar-memory" class="progress-bar progress-bar-striped progress-bar-animated bg-info"
+									style="width:0%" role="progressbar" aria-valuenow="25" aria-valuemin="0" aria-valuemax="100">
+								</div>
+							</div>
+							<hr>
+							<p class="text-dark"><strong>JVM Heap Used</strong> : <span id="jvm-used"></span> MB / <strong>Max</strong> : <span id="jvm-max"></span> MB</p>
+							<div class="progress">
+								<div id="progressbar-jvm" class="progress-bar progress-bar-striped progress-bar-animated bg-primary"
+									style="width:0%" role="progressbar" aria-valuenow="25" aria-valuemin="0" aria-valuemax="100">
+								</div>
+							</div>
+						</div>
+					</div>
+				</div>
+			</div>
+			<div class="row">
+				<div class="col-12">
+					<div class="card">
+						<div class="card-header bg-dark">
+							<span class="text-white text-left"><strong>프로세스 목록</strong></span>
+							<span class="text-white-50"><small>Process List</small></span>
+						</div>
+						<div class="card-body">
+							<table class="table table-sm table-hover table-borderless">
+								<thead>
+									<tr>
+										<th scope="col">#</th>
+										<th scope="col">USER</th>
+										<th scope="col">PID</th>
+										<th scope="col">COMMAND</th>
+										<th scope="col">%CPU</th>
+										<th scope="col">%MEM</th>
+									</tr>
+								</thead>
+								<tbody>
+									<tr th:each="i: ${#numbers.sequence(1, 20)}">
+										<th scope="row" th:text="${i}"></th>
+										<td th:id="'user-' + ${i}"></td>
+										<td th:id="'pid-' + ${i}"></td>
+										<td th:id="'cmd-' + ${i}"></td>
+										<td th:id="'pcpu-' + ${i}"></td>
+										<td th:id="'pmem-' + ${i}"></td>
+									</tr>
+								</tbody>
+							</table>
+						</div>
+					</div>
+				</div>
+			</div>
+		</div>
+	</div>
+
+	<script src="//unpkg.com/jquery@3/dist/jquery.min.js"></script>
+	<script src="//unpkg.com/popper.js@1/dist/umd/popper.min.js"></script>
+	<script src="//unpkg.com/bootstrap@4/dist/js/bootstrap.min.js"></script>
+	<script>
+		$(document).ready(function() {
+			const url = window.location.origin;
+			let jvmUsed, jvmMax, jvmPercentage;
+			
+			let source = new EventSource(url + '/stream');
+			source.onmessage = function(event) {
+				let res = JSON.parse(event.data);
+				
+				// CPU info
+				$('#cpu-model').text(res.cpu['model']);
+				$('#cpu-core').text(res.cpu['core']);
+				$('#cpu-thread').text(res.cpu['thread']);
+				$('#cpu-load').text(res.cpu['load']);
+				$('#cpu-clock').text(res.cpu['current_clock']);
+				$('#progressbar-cpu').css("width", res.cpu['load'] + "%").text(res.cpu['load'] + " %");
+				
+				if(res.cpu['load'] > 80) {
+					$('#progressbar-cpu').removeClass('bg-warning').addClass('bg-danger');
+				} else if(res.cpu['load'] > 50) {
+					$('#progressbar-cpu').removeClass('bg-danger').addClass('bg-warning');
+				} else {
+					$('#progressbar-cpu').removeClass('bg-danger').removeClass('bg-warning');
+				}
+				
+				// Memory info
+				$('#memory-used').text(res.memory['used']);
+				$('#memory-max').text(res.memory['max']);
+				$('#memory-swap').text(res.memory['swap']);
+				$('#progressbar-memory').css("width", res.memory['percentage'] + "%").text(res.memory['percentage'] + " %");
+				
+				$.getJSON(url + '/metrics/jvm.memory.used?tag=area:heap', function(data) {
+					jvmUsed = Math.round(data['measurements'][0]['value'] / 1e+6);
+					$('#jvm-used').text(jvmUsed);
+				});
+				$.getJSON(url + '/metrics/jvm.memory.max?tag=area:heap', function(data) {
+					jvmMax = Math.round(data['measurements'][0]['value'] / 1e+6);
+					$('#jvm-max').text(jvmMax);
+					jvmPercentage = (((jvmUsed * 100) / jvmMax)).toFixed(2);
+					$('#progressbar-jvm').css("width", jvmPercentage + "%").text(jvmPercentage + " %");
+				});
+				
+				// Process info
+				for(let i = 1; i < Object.keys(res.process).length + 1; i++) {
+					$('td#user-' + i).text(res.process[i]['user']);
+					$('td#pid-' + i).text(res.process[i]['pid']);
+					$('td#cmd-' + i).text(res.process[i]['cmd']);
+					$('td#pcpu-' + i).text(res.process[i]['cpu']);
+					$('td#pmem-' + i).text(res.process[i]['mem']);
+				}
+			};
+		});
+	</script>
+</body>
+</html>
